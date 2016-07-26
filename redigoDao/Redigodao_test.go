@@ -2,82 +2,149 @@ package redigoDao
 
 import (
 	"testing"
-	"time"
+	"github.com/stretchr/testify/assert"
+
 )
 
 
 
-func TestConfig(t *testing.T){
+func TestSet(t *testing.T) {
+	isSet , err:=Set("serialnumber", 1000)
+	assert.True(t , isSet)
+	assert.Nil(t , err)
 
-expectedPassword:= "Cisco123!"
-expectedPort:= "6379"
-expectedAddress:= "localhost"
-expectedProtocol:= "tcp"
-	redisConf:= GetRedisConfig()
-	if(redisConf.address != expectedAddress){
-		t.Error("Actual: " +  redisConf.address + "Expected: " + expectedAddress )
-	}
+	reply , _:= Get("serialnumber")
+	assert.NotNil(t, reply)
+	assert.Equal(t, reply, "1000")
 
-	if(redisConf.port != expectedPort){
-		t.Error("getPort failed")
-	}
-
-	if(redisConf.password != expectedPassword){
-		t.Error("getPassword failed")
-	}
-
-	if(redisConf.protocol != expectedProtocol){
-		t.Error("getProtocol failed")
-	}
+	defer DeleteAllKeys()
 
 
 }
 
-func TestGetConnectionpool(t *testing.T) {
-	expectedIdleTimeout:= 300 * time.Second
-	expectedMaxIdle := 3
+func TestGet(t *testing.T) {
+	Set("serialnumber" , 1000)
 
-	redisConnPool := GetConnectionpool(GetRedisConfig())
-	conn1:= redisConnPool.Get()
-	conn2:= redisConnPool.Get()
-	conn3:= redisConnPool.Get()
-	conn4:= redisConnPool.Get()
+	result , err := Get("serialnumber")
+	assert.Equal(t, "1000", result)
+	assert.Nil(t , err )
 
-	defer conn1.Close()
-	defer conn2.Close()
-	defer conn3.Close()
-	defer conn4.Close()
+	result1 , err1 := Get("phone")
+	assert.Equal(t, result1, "")
+	assert.NotNil(t , err1)
+	defer DeleteAllKeys()
+}
 
+func TestDelete(t *testing.T) {
+	deleted, err:=Delete("name")
+	assert.False(t , deleted)
+	assert.Nil(t , err)
 
-	if(conn1.Err()!= nil){
-		t.Error("Unable to get 1st connection")
-
-	}
-
-	if(conn2.Err()!= nil){
-		t.Error("Unable to get 2nt connection")
-
-	}
-
-	if(conn3.Err()!= nil){
-		t.Error("Unable to get 3rt connection")
-
-	}
-
-	if(conn4.Err() == nil){
-		t.Error("MaxActive is not working")
-	}
+	result , _:= Get("name")
+	assert.Equal(t, result, "")
 
 
+	Set("serialnumber" , 1000)
 
-	if(redisConnPool.MaxIdle != expectedMaxIdle){
-		t.Error("MaxIdle is not set properly")
+	deleted1, err1:=Delete("serialnumber")
+	assert.True(t , deleted1)
+	assert.Nil(t , err1)
 
-	}
-	if(redisConnPool.IdleTimeout != expectedIdleTimeout){
-		t.Error("IdleTimeout is not set properly")
+	result1 , _:= Get("serialnumber")
+	assert.Equal(t, result1, "")
 
-	}
+        defer DeleteAllKeys()
+
+}
+
+func TestSetIfNotExists(t *testing.T) {
+
+	isSet , err:= SetIfNotExists("name", "swathi")
+	assert.True(t , isSet)
+	assert.Nil(t ,err)
+
+	result , _:= Get("name")
+	assert.Equal(t, "swathi", result)
+
+	isSet1 , err1:= SetIfNotExists("name", "swrathna")
+	assert.False(t , isSet1)
+	assert.Nil(t ,err1)
+	result1 ,_:= Get("name")
+	assert.Equal(t, "swathi", result1)
+
+	defer DeleteAllKeys()
+
+}
+
+func TestExpireAKey(t *testing.T) {
+	Set("serialnumber" , 1000)
+	expires,err:=ExpireKey("serialnumber", 50)
+	assert.True(t , expires)
+	assert.Nil(t ,err)
+
+	et1,_:= GetExpiryTime("serialnumber")
+	assert.Equal(t, et1, 50)
+	assert.NotEqual(t, et1, "The key never expires")
+	assert.NotEqual(t, et1, "The key doesn't exist anymore")
+
+	expires1,err1:=ExpireKey("name", 50)
+	assert.False(t , expires1)
+	assert.Nil(t ,err1)
+
+	defer DeleteAllKeys()
+
+
+}
+
+func TestGetExpiryTime(t *testing.T) {
+	Set("serialnumber" , 1000)
+	eTime,err:= GetExpiryTime("serialnumber")
+	assert.Equal(t, eTime, "The key never expires")
+	assert.Nil(t ,err)
+
+        ExpireKey("serialnumber", 400)
+	eTime2, err2 := GetExpiryTime("serialnumber")
+	assert.Equal(t, eTime2, 400)
+	assert.NotEqual(t, eTime2, "The key never expires")
+	assert.NotEqual(t, eTime2, "The key doesn't exist anymore")
+	assert.Nil(t ,err2)
+
+	defer DeleteAllKeys()
+
+}
+
+func TestPersist(t *testing.T) {
+	Set("connections" , 10)
+	isPersistent,err:=Persist("connections")
+	assert.False(t , isPersistent)
+	assert.Nil(t ,err)
+	eTime,_:= GetExpiryTime("connections")
+	assert.Equal(t , eTime , "The key never expires")
+
+	ExpireKey("connections" , 80)
+	isPersistent1 , err1:=Persist("connections")
+	assert.True(t , isPersistent1)
+	assert.Nil(t ,err1)
+
+	eTime2,_:= GetExpiryTime("connections")
+	assert.Equal(t , eTime2 , "The key never expires")
+
+	defer DeleteAllKeys()
+}
+
+func TestContainsKey(t *testing.T) {
+
+	Set("connections" , 10)
+
+	hasKey,err:= ContainsKey("connections")
+	assert.True(t , hasKey)
+	assert.Nil(t ,err)
+
+	hasKey1,err1:= ContainsKey("profile")
+	assert.False(t , hasKey1)
+	assert.Nil(t ,err1)
+
+	defer DeleteAllKeys()
 }
 
 
